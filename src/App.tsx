@@ -520,7 +520,7 @@ export default function App() {
                   className="absolute inset-0 rounded-3xl overflow-hidden border border-white/10 shadow-2xl"
                 >
                   <img 
-                    src="/photos/28.png" 
+                    src="Ritashree_web/photos/28.png" 
                     alt="Ritashree" 
                     className="w-full h-full object-cover object-top opacity-80"
                     referrerPolicy="no-referrer"
