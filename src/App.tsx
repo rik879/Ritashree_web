@@ -5,7 +5,11 @@ import confetti from 'canvas-confetti';
 import { GoogleGenAI } from "@google/genai";
 
 // --- Initialization ---
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
+const getAi = () => {
+  const key = process.env.GEMINI_API_KEY || '';
+  if (!key) return null;
+  return new GoogleGenAI({ apiKey: key });
+};
 
 // --- Types ---
 interface Photo {
@@ -20,6 +24,12 @@ const WishGenerator = () => {
   const [isLoading, setIsLoading] = useState(false);
 
   const generateWish = async () => {
+    const ai = getAi();
+    if (!ai) {
+      setWish("Every day with you is a gift. Happy Birthday, my love!");
+      return;
+    }
+    
     setIsLoading(true);
     try {
       const response = await ai.models.generateContent({
