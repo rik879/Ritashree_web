@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence, useScroll, useTransform, useSpring } from 'motion/react';
-import { Heart, Sparkles, Stars, Gift, Calendar, ArrowRight, Music, Volume2, VolumeX, ChevronDown, Upload, X, Camera, Image as ImageIcon, Wand2, Loader2 } from 'lucide-react';
+import { Heart, Sparkles, Stars, Gift, Calendar, ArrowRight, Music, Volume2, VolumeX, ChevronDown, Upload, X, Camera, Image as ImageIcon, Wand2, Loader2, Play, Pause, Mic } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { GoogleGenAI } from "@google/genai";
 
@@ -289,6 +289,148 @@ const FloatingHeart: React.FC<{ delay?: number, x?: string }> = ({ delay = 0, x 
   </motion.div>
 );
 
+const VoiceMessagePlayer = ({ onPlayStart }: { onPlayStart: () => void }) => {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const barsRef = useRef<(HTMLDivElement | null)[]>([]);
+
+  // Web Audio API refs
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
+  const rafRef = useRef<number | null>(null);
+
+  const initAudio = () => {
+    if (!audioCtxRef.current && audioRef.current) {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      audioCtxRef.current = new AudioContextClass();
+      analyserRef.current = audioCtxRef.current.createAnalyser();
+      analyserRef.current.fftSize = 64; // 32 bins
+      
+      sourceRef.current = audioCtxRef.current.createMediaElementSource(audioRef.current);
+      sourceRef.current.connect(analyserRef.current);
+      analyserRef.current.connect(audioCtxRef.current.destination);
+    }
+  };
+
+  const updateWaveform = () => {
+    if (analyserRef.current) {
+      const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
+      analyserRef.current.getByteFrequencyData(dataArray);
+      
+      for (let i = 0; i < 20; i++) {
+        if (barsRef.current[i]) {
+          const val = dataArray[i] || 0;
+          const height = Math.max(10, (val / 255) * 100);
+          barsRef.current[i]!.style.height = `${height}%`;
+        }
+      }
+    }
+    rafRef.current = requestAnimationFrame(updateWaveform);
+  };
+
+  const togglePlay = async () => {
+    if (audioRef.current) {
+      if (isPlaying) {
+        audioRef.current.pause();
+        setIsPlaying(false);
+        if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      } else {
+        onPlayStart(); // Mute background music
+        
+        initAudio();
+        if (audioCtxRef.current?.state === 'suspended') {
+          await audioCtxRef.current.resume();
+        }
+        
+        audioRef.current.play().then(() => {
+          setIsPlaying(true);
+          updateWaveform();
+        }).catch(e => {
+          console.error("Audio play failed", e);
+          setIsPlaying(false);
+        });
+      }
+    }
+  };
+
+  const handleEnded = () => {
+    setIsPlaying(false);
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+  };
+
+  const defaultWaveHeights = [30, 50, 90, 40, 70, 100, 50, 80, 35, 60, 95, 45, 85, 30, 65, 90, 40, 75, 55, 30];
+
+  return (
+    <GlassCard className="max-w-2xl mx-auto flex flex-col items-center w-full">
+      <div className="flex items-center gap-3 mb-6 text-rose-400">
+        <Mic size={24} />
+        <h3 className="text-2xl font-serif italic text-white">A Voice from the Heart</h3>
+      </div>
+      
+      <audio
+        ref={audioRef}
+        src={`${BASE_URL}/resources/message.m4a`}
+        onEnded={handleEnded}
+        crossOrigin="anonymous"
+      />
+      
+      <div className="flex items-center gap-4 md:gap-6 w-full justify-center bg-black/20 p-6 rounded-3xl border border-white/5">
+        <motion.button
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.9 }}
+          onClick={togglePlay}
+          className="w-14 h-14 flex items-center justify-center rounded-full bg-rose-500 text-white shadow-lg shadow-rose-500/20 flex-shrink-0 relative overflow-hidden"
+        >
+          <AnimatePresence mode="wait">
+            {isPlaying ? (
+              <motion.div 
+                key="pause" 
+                initial={{ opacity: 0, scale: 0.5, rotate: -90 }} 
+                animate={{ opacity: 1, scale: 1, rotate: 0 }} 
+                exit={{ opacity: 0, scale: 0.5, rotate: 90 }} 
+                transition={{ duration: 0.15 }}
+                className="absolute inset-0 flex items-center justify-center"
+              >
+                <Pause size={24} fill="currentColor" />
+              </motion.div>
+            ) : (
+              <motion.div 
+                key="play" 
+                initial={{ opacity: 0, scale: 0.5, rotate: -90 }} 
+                animate={{ opacity: 1, scale: 1, rotate: 0 }} 
+                exit={{ opacity: 0, scale: 0.5, rotate: 90 }} 
+                transition={{ duration: 0.15 }}
+                className="absolute inset-0 flex items-center justify-center"
+              >
+                <Play size={24} fill="currentColor" className="ml-1" />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.button>
+        
+        <div className="flex items-center gap-1 md:gap-1.5 h-12 flex-1 max-w-[300px]">
+          {defaultWaveHeights.map((h, i) => (
+            <motion.div
+              key={i}
+              ref={(el: any) => { if (el) barsRef.current[i] = el; }}
+              animate={isPlaying ? { scaleY: 1 } : { scaleY: [0.3, 1, 0.4, 0.9, 0.3] }}
+              transition={isPlaying ? { duration: 0 } : { 
+                repeat: Infinity, 
+                duration: 1.2 + (i % 3) * 0.2, 
+                ease: "easeInOut", 
+                delay: i * 0.05 
+              }}
+              className="w-1.5 md:w-2 bg-rose-400 rounded-full origin-center"
+              style={{ height: `${h}%` }}
+            />
+          ))}
+        </div>
+      </div>
+    </GlassCard>
+  );
+};
+
 // --- Main App ---
 const BASE_URL = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -372,6 +514,28 @@ export default function App() {
     return () => window.removeEventListener('mousemove', handleMouseMove);
   }, []);
 
+  // Preload assets for zero-latency scrolling
+  useEffect(() => {
+    const imagesToPreload = [
+      ...photos.map(p => p.url),
+      `${BASE_URL}/photos/28.png`
+    ];
+    imagesToPreload.forEach(url => {
+      const img = new Image();
+      img.src = url;
+    });
+
+    const audioToPreload = [
+      `${BASE_URL}/resources/message.m4a`,
+      `${BASE_URL}/resources/One man's dream.mp3`
+    ];
+    audioToPreload.forEach(url => {
+      const audio = new Audio();
+      audio.src = url;
+      audio.preload = "auto";
+    });
+  }, []);
+
   const handleUpload = (files: FileList) => {
     const newPhotos = Array.from(files).map(file => ({
       id: Math.random().toString(36).substr(2, 9),
@@ -398,6 +562,13 @@ export default function App() {
       confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } });
       confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } });
     }, 250);
+  };
+
+  const pauseBackgroundAudio = () => {
+    if (audioRef.current && !isMuted) {
+      audioRef.current.pause();
+      setIsMuted(true);
+    }
   };
 
   const toggleAudio = () => {
@@ -428,7 +599,7 @@ export default function App() {
       <audio 
         ref={audioRef} 
         loop 
-        src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" 
+        src={`${BASE_URL}/resources/One man's dream.mp3`} 
       />
       
       {/* Floating Hearts */}
@@ -550,14 +721,28 @@ export default function App() {
                   className="mt-12 pt-12 border-t border-white/10 overflow-hidden"
                 >
                   <div className="font-serif text-2xl md:text-3xl text-white/90 leading-relaxed space-y-6 italic">
-                    <p>To my beautiful Rito,</p>
+                    <p>To my Rito,</p>
+                    <p>Happy Birthday.</p>
                     <p>
-                      Watching you grow, dream, and conquer the world is my greatest privilege. You possess a strength that is quiet yet unbreakable, and a kindness that heals everything it touches.
+                      Sometimes I sit and think about how lucky I am to know you. Watching you grow, chase your dreams, and become the person you’re meant to be is something really special to me. There’s a quiet strength in you that not everyone notices, but I see it, and it’s one of the many things I admire about you.
                     </p>
                     <p>
-                      On your birthday, I wish for you the very things you give to others: boundless joy, unwavering peace, and a love that feels like coming home. You deserve a galaxy of stars, but I hope my heart is enough for now.
+                      You have this way of making the world around you feel calmer and brighter just by being yourself. Your kindness, your smile, the way you care about people — those things matter more than you probably realize. They make people feel safe and understood, and that’s a rare kind of beauty.
                     </p>
-                    <p className="text-rose-400">Happy Birthday, Rito. Forever and always.</p>
+                    <p>
+                      On your birthday, I just want you to remember how much you deserve — happiness that stays, dreams that come true, and moments that make you feel proud of the person you are becoming. Life has a strange way of testing people who have the biggest hearts, but I know you’re strong enough to face anything that comes your way.
+                    </p>
+                    <p>
+                      I hope this year brings you closer to everything you dream about. I’ll always be cheering for you, proud of you, and grateful that you’re part of my life.
+                    </p>
+                    <p>
+                      And if I’m honest, the truth is simple: you mean a lot to me, Rito. More than words can perfectly explain.
+                    </p>
+                    <p>Happy Birthday.</p>
+                    <p className="text-rose-400 mt-8">
+                      Always,<br />
+                      Rik
+                    </p>
                   </div>
                 </motion.div>
               )}
@@ -597,6 +782,11 @@ export default function App() {
               Release the Magic
             </motion.button>
           </GlassCard>
+        </section>
+
+        {/* Voice Message Section */}
+        <section className="w-full">
+          <VoiceMessagePlayer onPlayStart={pauseBackgroundAudio} />
         </section>
 
         {/* Quote Section */}
