@@ -370,7 +370,7 @@ const VoiceMessagePlayer = ({ onPlayStart }: { onPlayStart: () => void }) => {
       
       <audio
         ref={audioRef}
-        src={`${BASE_URL}/resources/message.m4a`}
+        src={`${BASE_URL}/resources/message.mp3`}
         onEnded={handleEnded}
         crossOrigin="anonymous"
       />
@@ -526,7 +526,7 @@ export default function App() {
     });
 
     const audioToPreload = [
-      `${BASE_URL}/resources/message.m4a`,
+      `${BASE_URL}/resources/message.mp3`,
       `${BASE_URL}/resources/One man's dream.mp3`
     ];
     audioToPreload.forEach(url => {
